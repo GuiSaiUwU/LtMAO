@@ -14,6 +14,6 @@ if __name__ == '__main__':
     skn_vertice = SKNVertex()
 
     from requests import get
-    skn_uri = v
+    skn_uri = r'https://raw.communitydragon.org/latest/game/assets/characters/sion/skins/base/sion.skn'
     a = get(url=skn_uri).content
     skn.read('', a)
