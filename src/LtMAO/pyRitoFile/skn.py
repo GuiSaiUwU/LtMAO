@@ -3,7 +3,7 @@ from LtMAO.pyRitoFile.io import BinStream
 from LtMAO.pyRitoFile.hash import FNV1a
 from LtMAO.pyRitoFile.exceptions.sknexceptions import *
 from LtMAO.pyRitoFile.structs import Vector
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 def bin_hash(name):
     return f'{FNV1a(name):08x}'
@@ -39,13 +39,13 @@ class SKNVertex:
     )
 
     def __init__(self):
-        self.position: Vector[float, float, float] = None
-        self.influences: Tuple[int, int, int, int] = None
-        self.weights: Tuple[float, float, float, float] = None
-        self.normal: Vector[float, float, float] = None
-        self.uv: Vector[float, float] = None
+        self.position: Optional[Vector] = None
+        self.influences: Optional[Tuple[int, int, int, int]] = None
+        self.weights: Optional[Tuple[float, float, float, float]] = None
+        self.normal: Optional[Vector] = None
+        self.uv: Optional[Vector] = None
         self.color: Optional[Tuple[int, int, int, int]] = None
-        self.tangent: Optional[Vector[float, float, float, float]] = None
+        self.tangent: Optional[Vector] = None
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
@@ -74,12 +74,12 @@ class SKNSubmesh:
     )
 
     def __init__(self):
-        self.name: int = None
-        self.bin_hash: str = None
-        self.vertex_start: int = None
-        self.vertex_count: int = None
-        self.index_start: int = None
-        self.index_count: int = None
+        self.name: Optional[str] = None
+        self.bin_hash: Optional[str] = None
+        self.vertex_start: Optional[int] = None
+        self.vertex_count: Optional[int] = None
+        self.index_start: Optional[int] = None
+        self.index_count: Optional[int] = None
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
@@ -119,8 +119,8 @@ class SKN:
     )
     
     def __init__(self):
-        self.signature: str = None
-        self.version: float = None
+        self.signature: Union[int, None] = None
+        self.version: Optional[float] = None
         self.flags: Optional[int] = None
         self.bounding_box: Optional[Tuple[Vector, Vector]] = None
         self.bounding_sphere: Optional[Tuple[Vector, float]] = None
@@ -168,10 +168,11 @@ class SKN:
         
         with self.stream(path, 'rb', raw) as bs:
             self.signature, = bs.read_u32()
-            if self.signature != 0x00112233:
-                raise WrongSKNSignature(
-                    f'pyRitoFile: Failed: Read SKN {path}: Wrong signature file: {hex(self.signature)}.')
-            self.signature = hex(self.signature)
+            if self.signature is not None:  # Added to pass mypy (type-hinting)
+                if self.signature != 0x00112233:
+                    raise WrongSKNSignature(
+                        f'pyRitoFile: Failed: Read SKN {path}: Wrong signature file: {hex(self.signature)}.')
+                self.signature = hex(self.signature)  # type: ignore[assignment]
 
             major, minor = bs.read_u16(2)
             self.version = float(f'{major}.{minor}')
@@ -231,7 +232,7 @@ class SKN:
                 vertex.weights = bs.read_f32(4)
                 vertex.normal, = bs.read_vec3()
                 vertex.uv, = bs.read_vec2()
-                if self.vertex_type != None:
+                if self.vertex_type is not None:
                     if self.vertex_type >= 1:
                         vertex.color = bs.read_u8(4)
                         if self.vertex_type == 2:
