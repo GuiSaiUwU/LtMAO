@@ -1,71 +1,138 @@
 from io import BytesIO
 from LtMAO.pyRitoFile.io import BinStream
 from LtMAO.pyRitoFile.hash import FNV1a
-
+from LtMAO.pyRitoFile.exceptions.sknexceptions import *
+from LtMAO.pyRitoFile.structs import Vector
+from typing import Optional, Tuple
 
 def bin_hash(name):
     return f'{FNV1a(name):08x}'
 
 
 class SKNVertex:
+    """
+    Fields:
+    --------
+        `Optionals`:\n
+            Based in :class:`SKN` Vertex_Type.\n
+            `color`: A tuple, that represents an (RGBA), vertex_type >= 1.\n
+            `tangent`: :class:`Vector`, vertex_type == 2.\n
+
+        `Persistents between every vertex type`:\n
+            `position`: :class:`Vector`, local XYZ position.\n
+            `normal`: :class:`Vector`, no idea.
+            `influences`: A tuple, representing each unique bone id that has influence in the vertex.\n
+            `weights`: A tuple, representing how much weight the certain bone id has in the vertex.\n
+            # Example of reading influences and weights:\n
+            # Assume influence (102, 55, 0, 0), and weights (0.65, 0.35, 0, 0).\n
+            # The joint with ID of 102 have an weight of 0.65 in the vertex.\n
+            # The joint with ID of 55 have an weight of 0.35 in the vertex.\n
+            # Both has to be with lenght 4, since league only allows max 4 influences in a bound skin mesh.\n
+
+    Methods:
+    -------
+        `__json__()`: Returns a dict of every fields. (field: value of the field)
+    """
     __slots__ = (
         'position', 'influences', 'weights', 'normal', 'uv',
         'color', 'tangent'
     )
 
     def __init__(self):
-        self.position = None
-        self.influences = None
-        self.weights = None
-        self.normal = None
-        self.uv = None
-        self.color = None
-        self.tangent = None
+        self.position: Vector[float, float, float] = None
+        self.influences: Tuple[int, int, int, int] = None
+        self.weights: Tuple[float, float, float, float] = None
+        self.normal: Vector[float, float, float] = None
+        self.uv: Vector[float, float] = None
+        self.color: Optional[Tuple[int, int, int, int]] = None
+        self.tangent: Optional[Vector[float, float, float, float]] = None
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
 
 
 class SKNSubmesh:
+    """
+    Represents a single Submesh
+
+    Fields:
+    --------
+        `name`: String, name of the submesh.\n
+        `bin_hash`: String, name of the submesh as FNV1a lowered hash.\n
+        `vertex_start`: Integer, where the vertex start.\n
+        `vertex_count`: Integer, amount of unique vertices.\n
+        `index_start`: Integer, where the index starts.\n
+        `index_count`: Integer, amount of unique indices.\n
+
+    Methods:
+    -------
+        `__json__()`: Returns a dict of every fields. (field: value of the field)
+    """
     __slots__ = (
         'name', 'bin_hash',
         'vertex_start', 'vertex_count', 'index_start', 'index_count'
     )
 
     def __init__(self):
-        self.name = None
-        self.bin_hash = None
-        self.vertex_start = None
-        self.vertex_count = None
-        self.index_start = None
-        self.index_count = None
+        self.name: int = None
+        self.bin_hash: str = None
+        self.vertex_start: int = None
+        self.vertex_count: int = None
+        self.index_start: int = None
+        self.index_count: int = None
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
 
 
 class SKN:
+    """
+    Represents a Simple Skin Mesh (3D File) from League of Legends, use .read() to get the fields initialized
+
+    Fields:
+    -------
+        Optionals for version with major being 4 (4.0, 4.1, ...):\n
+            `bounding_box`: A tuple of (Vector, Vector) that represents the local positions of the bounding box.\n
+            `bounding_sphere`: A tuple of (Vector, float) that represents the local boundig sphere.\n
+            `flags`: Integer that represents the flags.\n
+            `vertex_type`: Integer that represents the vertex type.\n
+            `vertex_size`: Integer that represents the vertex size.\n
+        
+        Persistents between every version:
+            `signature`: A string that contains the hex value of the SKN signature.\n
+            `version`: A float that represents the version (major.minor).\n
+            `submeshes`: A list of :class:`SKNSubmesh`.\n
+            `vertices`: A list of :class:`SKNVertex`.\n
+            `indices`: A list of integers that represents every 3 vertice index thats connects to a triangle,
+                example: (0, 5, 4, ...) vertex 0, 5, 4 connects together to make a triangle.\n
+    
+    Methods:
+    -------
+        `read()`: Used to read any supported SKN file, it fills the fields of the instance.\n
+        `__json__()`: Returns a dict of every fields. (field: value of the field).\n
+        `stream()`: Used to manually write / read SKN files.
+    """
     __slots__ = (
         'signature', 'version', 'flags',
         'bounding_box', 'bounding_sphere', 'vertex_type', 'vertex_size',
         'submeshes', 'indices', 'vertices'
     )
-
+    
     def __init__(self):
-        self.signature = None
-        self.version = None
-        self.flags = None
-        self.bounding_box = None
-        self.bounding_sphere = None
-        self.vertex_type = None
-        self.vertex_size = None
-        self.submeshes = []
-        self.indices = []
-        self.vertices = []
+        self.signature: str = None
+        self.version: float = None
+        self.flags: Optional[int] = None
+        self.bounding_box: Optional[Tuple[Vector, Vector]] = None
+        self.bounding_sphere: Optional[Tuple[Vector, float]] = None
+        self.vertex_type: Optional[int] = None
+        self.vertex_size: Optional[int] = None
+        self.submeshes: list[SKNSubmesh] = []
+        self.indices: list[int] = []
+        self.vertices: list[SKNVertex] = []
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
-
+    
     def stream(self, path, mode, raw=None):
         if raw != None:
             if raw == True:  # the bool True value
@@ -74,19 +141,43 @@ class SKN:
                 return BinStream(BytesIO(raw))
         return BinStream(open(path, mode))
 
-    def read(self, path, raw=None):
+    def read(self, path: str = '', raw: Optional[bytes] = None) -> None:
+        """
+        Initialize the fields of :class:`SKN`
+
+        Parameters
+        ------------
+        `path`: Optional[:class:`str`]
+            File path to read the SKN using an existing file that should work in `open(path)`.\n
+        
+        `raw`: Optional[:class:`bytes`]
+            None (`Default value`): Recommended if reading from an file in local memory.
+            bytes: Reads SKN information from a bytes object.\n
+
+        Raises
+        --------
+        `WrongSKNSignature`:
+            If the SKN signature is different of 0x00112233.\n
+        `UnsupportedSKNVersion`:
+            If the SKN version is not in supported versions.\n
+        `InvalidSKNReadUsage`:
+            If raw and path is empty.\n
+        """
+        if not path and not raw or raw == True:
+            raise InvalidSKNReadUsage(f'pyRitoFile: Provide atleast one file path or one bytes-like object as raw.')
+        
         with self.stream(path, 'rb', raw) as bs:
             self.signature, = bs.read_u32()
             if self.signature != 0x00112233:
-                raise Exception(
-                    f'pyRitoFile: Failed: Read SKN {path}: Wrong signature file: {hex(self.signature)}')
+                raise WrongSKNSignature(
+                    f'pyRitoFile: Failed: Read SKN {path}: Wrong signature file: {hex(self.signature)}.')
             self.signature = hex(self.signature)
 
             major, minor = bs.read_u16(2)
             self.version = float(f'{major}.{minor}')
             if major not in (0, 2, 4) and minor != 1:
-                raise Exception(
-                    f'pyRitoFile: Failed: Read SKN {path}: Unsupported file version: {major}.{minor}')
+                raise UnsupportedSKNVersion(
+                    f'pyRitoFile: Failed: Read SKN {path}: Unsupported file version: {major}.{minor}.')
 
             if major == 0:
                 # version 0 doesn't have submesh data
@@ -130,7 +221,7 @@ class SKN:
                     continue
                 self.indices.extend(
                     (indices[i], indices[i+1], indices[i+2]))
-
+            
             # read vertices
             self.vertices = [SKNVertex() for i in range(vertex_count)]
             for i in range(vertex_count):
