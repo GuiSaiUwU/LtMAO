@@ -1,8 +1,8 @@
 from io import BytesIO
 from LtMAO.pyRitoFile.io import BinStream
 from LtMAO.pyRitoFile.hash import FNV1a
-from LtMAO.pyRitoFile.exceptions.sknexceptions import *
-from LtMAO.pyRitoFile.structs import Vector
+from LtMAO.pyRitoFile.excepts import WrongFileSignature, UnsupportedFileVersion, InvalidMethodUsage
+from LtMAO.pyRitoFile.structs import Vector, BoundingBox, BoundingSphere
 from typing import Optional, Tuple, Union
 
 def bin_hash(name):
@@ -11,6 +11,8 @@ def bin_hash(name):
 
 class SKNVertex:
     """
+    Represents a single Vertex.
+    
     Fields:
     --------
         `Optionals`:\n
@@ -53,7 +55,7 @@ class SKNVertex:
 
 class SKNSubmesh:
     """
-    Represents a single Submesh
+    Represents a single Submesh.
 
     Fields:
     --------
@@ -92,8 +94,8 @@ class SKN:
     Fields:
     -------
         Optionals for version with major being 4 (4.0, 4.1, ...):\n
-            `bounding_box`: A tuple of (Vector, Vector) that represents the local positions of the bounding box.\n
-            `bounding_sphere`: A tuple of (Vector, float) that represents the local boundig sphere.\n
+            `bounding_box`: A :class:`BoundingBox` that represents the local bounding box, it has: min_vec, max_vec; while min and max together creates a Cube.\n
+            `bounding_sphere`: A :class:`BoundingSphere` that represents the local bounding sphere, it has: point, radius; while point and radius together creates a Sphere.\n
             `flags`: Integer that represents the flags.\n
             `vertex_type`: Integer that represents the vertex type.\n
             `vertex_size`: Integer that represents the vertex size.\n
@@ -119,11 +121,11 @@ class SKN:
     )
     
     def __init__(self):
-        self.signature: Union[int, None] = None
+        self.signature: Optional[int] = None
         self.version: Optional[float] = None
         self.flags: Optional[int] = None
-        self.bounding_box: Optional[Tuple[Vector, Vector]] = None
-        self.bounding_sphere: Optional[Tuple[Vector, float]] = None
+        self.bounding_box: Optional[BoundingBox] = None
+        self.bounding_sphere: Optional[BoundingSphere] = None
         self.vertex_type: Optional[int] = None
         self.vertex_size: Optional[int] = None
         self.submeshes: list[SKNSubmesh] = []
@@ -156,28 +158,25 @@ class SKN:
 
         Raises
         --------
-        `WrongSKNSignature`:
-            If the SKN signature is different of 0x00112233.\n
-        `UnsupportedSKNVersion`:
-            If the SKN version is not in supported versions.\n
-        `InvalidSKNReadUsage`:
-            If raw and path is empty.\n
+        `WrongFileSignature.`\n
+        `UnsupportedFileVersion.`\n
+        `InvalidMethodUsage.`\n
         """
         if not path and not raw or raw == True:
-            raise InvalidSKNReadUsage(f'pyRitoFile: Provide atleast one file path or one bytes-like object as raw.')
+            raise InvalidMethodUsage(f'pyRitoFile: Provide atleast one file path or one bytes-like object as raw.')
         
         with self.stream(path, 'rb', raw) as bs:
             self.signature, = bs.read_u32()
             if self.signature is not None:  # Added to pass mypy (type-hinting)
                 if self.signature != 0x00112233:
-                    raise WrongSKNSignature(
+                    raise WrongFileSignature(
                         f'pyRitoFile: Failed: Read SKN {path}: Wrong signature file: {hex(self.signature)}.')
                 self.signature = hex(self.signature)  # type: ignore[assignment]
 
             major, minor = bs.read_u16(2)
             self.version = float(f'{major}.{minor}')
             if major not in (0, 2, 4) and minor != 1:
-                raise UnsupportedSKNVersion(
+                raise UnsupportedFileVersion(
                     f'pyRitoFile: Failed: Read SKN {path}: Unsupported file version: {major}.{minor}.')
 
             if major == 0:
@@ -211,8 +210,8 @@ class SKN:
                 if major == 4:
                     self.vertex_size, = bs.read_u32()
                     self.vertex_type, = bs.read_u32()
-                    self.bounding_box = (bs.read_vec3()[0], bs.read_vec3()[0])
-                    self.bounding_sphere = (
+                    self.bounding_box = BoundingBox(bs.read_vec3()[0], bs.read_vec3()[0])
+                    self.bounding_sphere = BoundingSphere(
                         bs.read_vec3()[0], bs.read_f32()[0])
 
             # read unique indices

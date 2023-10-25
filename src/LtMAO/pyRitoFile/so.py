@@ -1,9 +1,40 @@
 from io import BytesIO, StringIO
 from LtMAO.pyRitoFile.io import BinStream
-from LtMAO.pyRitoFile.structs import Vector
-
+from LtMAO.pyRitoFile.structs import Vector, BoundingBox
+from LtMAO.pyRitoFile.excepts import WrongFileSignature, UnsupportedFileVersion, InvalidMethodUsage
+from typing import Optional
 
 class SO:
+    """
+    Represents either a SCO or an SCB.
+
+    Fields:
+    --------
+        `Optionals for SCO`:
+            `pivot`: :class:`Vector` that represents the pivot of the SCO, because them does not store bones.
+        
+        `Optionals for SCB`:
+            `flags`: A integer.
+            `version`: A float.
+            `vertex_type`: A integer that represents the vertex type.\n
+            `bounding_box`: :class:`BoundingBox` that has a min and max vectors.\n
+            `colors`: A list of RGBA values, only created if the SCB vertex_type >= 1.\n
+
+        `Shared`:
+            `material`: A string that represents the material name from the SO.\n
+            `name`: A string that represents the name of the SO.\n
+            `indices`: A list of integers that contains the unique indices.\n
+            `positions`: A list of :class:`Vector`.\n
+            `central`: A :class:`Vector`.
+    
+    Methods:
+    -------
+        `read_sco()`: Used to read any supported SCO file, it fills the fields of the instance.\n
+        `read_scb()`: Used to read any supported SCB file, it fills the fields of the instance.\n
+        `stream_sco()`: Used to manually write / read SCO files.\n
+        `stream_scb()`: Used to manually write / read SCB files.\n
+        `__json__()`: Returns a dict of every fields. {field: value of the field}.\n
+    """
     __slots__ = (
         'signature', 'version', 'flags', 'name',
         'central', 'pivot', 'bounding_box', 'material', 'vertex_type',
@@ -11,30 +42,22 @@ class SO:
     )
 
     def __init__(self):
-        self.signature = None
-        self.version = None
-        self.flags = None
-        self.name = None
-        self.central = None
-        self.pivot = None
-        self.bounding_box = None
-        self.material = None
-        self.vertex_type = None
-        self.indices = []
-        self.positions = []
-        self.uvs = []
-        self.colors = []
+        self.signature: Optional[str] = None
+        self.version: Optional[float] = None
+        self.flags: Optional[int] = None
+        self.name: Optional[str] = None
+        self.central: Optional[Vector] = None
+        self.pivot: Optional[Vector] = None
+        self.bounding_box: Optional[BoundingBox] = None
+        self.material: Optional[str] = None
+        self.vertex_type: Optional[int] = None
+        self.indices: list[int] = []
+        self.positions: list[Vector] = []
+        self.uvs: list[Vector] = []
+        self.colors: list[list[int]] = []
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
-
-    def stream(self, path, mode, raw=None):
-        if raw != None:
-            if raw == True:  # the bool True value
-                return BinStream(BytesIO())
-            else:
-                return BinStream(BytesIO(raw))
-        return BinStream(open(path, mode))
 
     def stream_sco(self, path, mode, raw=None):
         if raw != None:
@@ -52,14 +75,34 @@ class SO:
                 return BinStream(BytesIO(raw))
         return BinStream(open(path, mode))
 
-    def read_sco(self, path, raw=None):
+    def read_sco(self, path='', raw=None):
+        """
+        Initialize the fields of :class:`SO`, using SCO.
+
+        Parameters
+        ------------
+        `path`: Optional[:class:`str`]
+            File path to read the SCO using an existing file that should work in `open(path)`.\n
+        
+        `raw`: Optional[:class:`bytes`]
+            None (`Default value`): Recommended if reading from an file in local memory.\n
+            bytes (`String encoded as ascii`): Reads SCO information from it.\n
+
+        Raises
+        --------
+        `WrongFileSignature.`\n
+        `InvalidMethodUsage.`\n
+        """
+        if not path and not raw or raw == True:
+            raise InvalidMethodUsage(f'pyRitoFile: Provide atleast one file path or one bytes-like object as raw.')
+        
         with self.stream_sco(path, 'r', raw) as f:
             lines = f.readlines()
             lines = [line[:-1] for line in lines]
 
             self.signature = lines[0]
             if self.signature != '[ObjectBegin]':
-                raise Exception(
+                raise WrongFileSignature(
                     f'pyRitoFile: Failed: Read SCO {path}: Wrong file signature: {self.signature}')
 
             index = 1  # skip magic
@@ -115,24 +158,45 @@ class SO:
 
                 index += 1
 
-    def read_scb(self, path, raw=None):
+    def read_scb(self, path='', raw=None):
+        """
+        Initialize the fields of :class:`SO`, using a SCB.
+
+        Parameters
+        ------------
+        `path`: Optional[:class:`str`]
+            File path to read the SCB using an existing file that should work in `open(path)`.\n
+        
+        `raw`: Optional[:class:`bytes`]
+            None (`Default value`): Recommended if reading from an file in local memory.
+            bytes: Reads SCB information from a bytes object.\n
+
+        Raises
+        --------
+        `WrongFileSignature.`\n
+        `UnsupportedFileVersion.`\n
+        `InvalidMethodUsage.`\n
+        """
+        if not path and not raw or raw == True:
+            raise InvalidMethodUsage(f'pyRitoFile: Provide atleast one file path or one bytes-like object as raw.')
+        
         with self.stream_scb(path, 'rb', raw) as bs:
             self.signature, = bs.read_a(8)
             if self.signature != 'r3d2Mesh':
-                raise Exception(
+                raise WrongFileSignature(
                     f'pyRitoFile: Failed: Read SCB {path}: Wrong file signature: {self.signature}')
 
             major, minor = bs.read_u16(2)
             self.version = float(f'{major}.{minor}')
             if major not in (3, 2) and minor != 1:
-                raise Exception(
+                raise UnsupportedFileVersion(
                     f'pyRitoFile: Failed: Read SCB {path}: Unsupported file version: {major}.{minor}')
 
             self.name, = bs.read_a_padded(128)
             vertex_count, face_count, self.flags = bs.read_u32(3)
 
             # bouding box
-            self.bounding_box = (bs.read_vec3()[0], bs.read_vec3()[0])
+            self.bounding_box = BoundingBox(bs.read_vec3()[0], bs.read_vec3()[0])
 
             if major == 3 and minor == 2:
                 self.vertex_type, = bs.read_u32()
