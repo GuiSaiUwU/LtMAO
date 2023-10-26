@@ -1,14 +1,37 @@
 from io import BytesIO
 from LtMAO.pyRitoFile.io import BinStream
-from LtMAO.pyRitoFile.structs import Matrix4
+from LtMAO.pyRitoFile.structs import Matrix4, Vector, Quaternion
 from LtMAO.pyRitoFile.hash import Elf, FNV1a
-
+from LtMAO.pyRitoFile.excepts import WrongFileSignature, UnsupportedFileVersion, InvalidMethodUsage
+from typing import Optional
 
 def bin_hash(name):
     return f'{FNV1a(name):08x}'
 
 
 class SKLJoint:
+    """
+    Represents one single joint.
+
+    Fields:
+    -------
+        `id`: A integer that represents the id of the joint.\n
+        `name`: A string that has the name of the joint.\n
+        `bin_hash`: A string, name of the joint as FNV1a lowered hash.\n
+        `parent`: A integer that points to the parent bone, -1 means world parent (not a child of any joint).\n
+        `hash`: A integer that represents the hash from the curret joint.\n
+        `radius`: A float that represent the radius of the joint.\n
+        `flags`: A integer that represents the flags of the current joint.\n\n
+        (GuiSai note: I dont know 3D Stuff)\n
+        Lets assume that local stands for the local matrix of the joint.
+        And the ibind stands for the inverse bind pose matrix.\n
+        `local_translate`: :class:`Vector`.\n
+        `local_rotate`: :class:`Quaternion`.\n
+        `local_scale`: :class:`Vector`.\n
+        `ibind_translate`: :class:`Vector`.\n
+        `ibind_rotate`: :class:`Quaternion`.\n
+        `ibind_scale`: :class:`Vector`.\n
+    """
     __slots__ = (
         'id', 'name', 'bin_hash', 'parent', 'hash', 'radius', 'flags',
         'local_translate', 'local_rotate', 'local_scale',
@@ -16,16 +39,16 @@ class SKLJoint:
     )
 
     def __init__(self):
-        self.id = None
-        self.name = None
-        self.bin_hash = None
-        self.parent = None
-        self.hash = None
-        self.radius = None
-        self.flags = None
-        self.local_translate = None
-        self.local_rotate = None
-        self.local_scale = None
+        self.id: Optional[int] = None
+        self.name: Optional[str] = None
+        self.bin_hash: Optional[str] = None
+        self.parent: Optional[int] = None
+        self.hash: Optional[int] = None
+        self.radius: Optional[float] = None
+        self.flags: Optional[int] = None
+        self.local_translate: Optional[Vector] = None
+        self.local_rotate: Optional[Quaternion] = None
+        self.local_scale: Optional[Vector] = None
         self.ibind_translate = None
         self.ibind_rotate = None
         self.ibind_scale = None
@@ -35,20 +58,45 @@ class SKLJoint:
 
 
 class SKL:
+    """
+    Represents a Skeleton from League of Legends, use .read() to get the fields initialized.
+
+    Fields:
+    -------\n
+        `Unique from new SKL`:
+            `flags`: Integer that represents the flags.\n
+            `name`: String that represents the name.\n
+            `asset`: String that represents the asset.\n
+
+        `Persistents`:
+            `signature`: A string that contains the hex value of the SKL signature.\n
+            `version`: A integer that represents the version.\n
+            `file_size`: A integer that represents the file size.\n
+            `joints`: A list of :class:`SKLJoint`.\n
+            `influences`: A tuple of integer that represents each unique bound joint id.
+Note: not every joint is inside unfluences, because not every joint have skin bound, for example vfx bones.\n
+    
+    Methods:
+    -------
+        `read()`: Used to read any supported SKL file, it fills the fields of the instance.\n
+        `write()`: Used to write the current instance.\n
+        `stream()`: Used to manually write / read SKL files.\n
+        `__json__()`: Returns a dict of every fields. (field: value of the field).\n
+    """
     __slots__ = (
         'file_size', 'signature', 'version', 'flags',
         'name', 'asset', 'joints', 'influences'
     )
 
     def __init__(self):
-        self.file_size = None
-        self.signature = None
-        self.version = None
-        self.flags = None
-        self.name = None
-        self.asset = None
-        self.joints = []
-        self.influences = []
+        self.file_size: Optional[int] = None
+        self.signature: Optional[str] = None
+        self.version: Optional[int] = None
+        self.flags: Optional[int] = None
+        self.name: Optional[str] = None
+        self.asset: Optional[str] = None
+        self.joints: list[SKLJoint] = []
+        self.influences: tuple[int, ...] = []  # type: ignore[assignment]
 
     def __json__(self):
         return {key: getattr(self, key) for key in self.__slots__}
@@ -75,7 +123,7 @@ class SKL:
                 if self.version != 0:
                     raise Exception(
                         f'pyRitoFile: Failed: Read SKL {path}: Unsupported file version: {self.version}')
-                self.signature = hex(self.signature)
+                self.signature = hex(self.signature)  # type: ignore[arg-type]
                 # unknown
                 self.flags, = bs.read_u16()
                 # counts
@@ -138,8 +186,8 @@ class SKL:
                 skeleton_id, = bs.read_u32()
 
                 joint_count, = bs.read_u32()
-                self.joints = [SKLJoint() for i in range(joint_count)]
-                old_matrices = [None] * joint_count
+                self.joints = [SKLJoint() for _ in range(joint_count)]
+                old_matrices: list[Matrix4] = [None] * joint_count  # type: ignore[list-item]
                 for i in range(joint_count):
                     joint = self.joints[i]
 
@@ -160,14 +208,14 @@ class SKL:
                 for i in range(joint_count):
                     joint = self.joints[i]
                     local = old_matrices[i] if joint.parent == - \
-                        1 else old_matrices[i] * old_matrices[joint.parent].inverse()
+                        1 else old_matrices[i] * old_matrices[joint.parent].inverse()  # type: ignore[index]
                     joint.local_translate, joint.local_rotate, joint.local_scale = local.decompose()
                     ibind = old_matrices[i].inverse()
                     joint.ibind_translate, joint.ibind_rotate, joint.ibind_scale = ibind.decompose()
 
                 # read influences
                 if self.version == 1:
-                    self.influences = list(range(joint_count))
+                    self.influences = tuple(range(joint_count))
 
                 if self.version == 2:
                     influence_count, = bs.read_u32()

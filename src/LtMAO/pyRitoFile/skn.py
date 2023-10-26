@@ -89,7 +89,7 @@ class SKNSubmesh:
 
 class SKN:
     """
-    Represents a Simple Skin Mesh (3D File) from League of Legends, use .read() to get the fields initialized
+    Represents a Simple Skin Mesh (3D File) from League of Legends, use .read() to get the fields initialized.
 
     Fields:
     -------

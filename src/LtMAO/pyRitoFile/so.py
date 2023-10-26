@@ -202,7 +202,7 @@ class SO:
                 self.vertex_type, = bs.read_u32()
 
             self.positions = bs.read_vec3(vertex_count)
-            if self.vertex_type != None:
+            if self.vertex_type is not None:
                 if self.vertex_type >= 1:
                     self.colors = [bs.read_u8(4) for i in range(vertex_count)]
 
