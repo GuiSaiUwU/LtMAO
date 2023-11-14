@@ -121,7 +121,7 @@ Note: not every joint is inside unfluences, because not every joint have skin bo
                 self.file_size, self.signature, self.version, = bs.read_u32(
                     3)
                 if self.version != 0:
-                    raise Exception(
+                    raise UnsupportedFileVersion(
                         f'pyRitoFile: Failed: Read SKL {path}: Unsupported file version: {self.version}')
                 self.signature = hex(self.signature)  # type: ignore[arg-type]
                 # unknown
@@ -174,12 +174,12 @@ Note: not every joint is inside unfluences, because not every joint have skin bo
             else:
                 self.signature, = bs.read_a(8)
                 if self.signature != 'r3d2sklt':
-                    raise Exception(
+                    raise WrongFileSignature(
                         f'pyRitoFile: Failed: Read SKL {path}: Wrong file signature: {self.signature}')
 
                 self.version, = bs.read_u32()
                 if self.version not in (1, 2):
-                    raise Exception(
+                    raise UnsupportedFileVersion(
                         f'pyRitoFile: Failed: Read SKL {path}: Unsupported file version: {self.version}')
 
                 # skeleton id

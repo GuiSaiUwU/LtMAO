@@ -10,8 +10,6 @@ if __name__ == '__main__':
     # TODO: Delete this
 
     skn = SKN()
-    skn_submesh = SKNSubmesh()
-    skn_vertice = SKNVertex()
 
     from requests import get
     skn_uri = r'https://raw.communitydragon.org/latest/game/assets/characters/sion/skins/base/sion.skn'
