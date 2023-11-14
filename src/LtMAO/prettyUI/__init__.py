@@ -3,14 +3,13 @@ import customtkinter as ctk
 import tkinter as tk
 import tkinter.filedialog as tkfd
 
-from LtMAO import setting, pyRitoFile, winLT, wad_tool, hash_manager, cslmao, leaguefile_inspector, animask_viewer, no_skin, vo_helper, uvee, ext_tools, shrum, pyntex, hapiBin, bnk_tool
-from LtMAO.prettyUI.helper import Keeper, Log, EmojiImage
+from LtMAO import setting, pyRitoFile, winLT, wad_tool, hash_manager, cslmao, leaguefile_inspector, animask_viewer, no_skin, vo_helper, uvee, ext_tools, shrum, pyntex, hapiBin, bnk_tool, sborf
+from LtMAO.prettyUI.helper import Keeper, Log, EmojiImage, check_thread_safe
 
 import os
 import os.path
 from threading import Thread
 from traceback import format_exception
-import datetime
 from PIL import Image
 
 LOG = Log.add
@@ -20,23 +19,13 @@ TRANSPARENT = 'transparent'
 tk_widgets = Keeper()
 
 
-def rce(self, *args):
-    # redirect tkinter error print
-    err = format_exception(*args)
-    LOG(err)
-    print(''.join(err))
-
-
-ctk.CTk.report_callback_exception = rce
-
-
-def check_thread_safe(thread):
-    if thread == None:
-        return True
-    else:
-        if not thread.is_alive():
-            return True
-    return False
+def set_rce():
+    def rce(self, *args):
+        # redirect tkinter error print
+        err = format_exception(*args)
+        LOG(err)
+        print(''.join(err))
+    ctk.CTk.report_callback_exception = rce
 
 
 def create_main_app_and_frames():
@@ -92,6 +81,7 @@ def create_CSLMAO_page():
     tk_widgets.CSLMAO.mods = []
     tk_widgets.CSLMAO.make_overlay = None
     tk_widgets.CSLMAO.run_overlay = None
+    tk_widgets.CSLMAO.toggle_all = True
     # create action frame
     tk_widgets.CSLMAO.action_frame = ctk.CTkFrame(
         tk_widgets.CSLMAO.page_frame, fg_color=TRANSPARENT)
@@ -101,9 +91,10 @@ def create_CSLMAO_page():
     tk_widgets.CSLMAO.action_frame.columnconfigure(0, weight=1)
     tk_widgets.CSLMAO.action_frame.columnconfigure(1, weight=1)
     tk_widgets.CSLMAO.action_frame.columnconfigure(2, weight=1)
-    tk_widgets.CSLMAO.action_frame.columnconfigure(3, weight=699)
-    tk_widgets.CSLMAO.action_frame.columnconfigure(4, weight=1)
+    tk_widgets.CSLMAO.action_frame.columnconfigure(3, weight=1)
+    tk_widgets.CSLMAO.action_frame.columnconfigure(4, weight=699)
     tk_widgets.CSLMAO.action_frame.columnconfigure(5, weight=1)
+    tk_widgets.CSLMAO.action_frame.columnconfigure(6, weight=1)
 
     def run_cmd():
         if cslmao.preparing:
@@ -194,14 +185,26 @@ def create_CSLMAO_page():
         mgs = []
         for fantome_path in fantome_paths:
             mod_path = '.'.join(os.path.basename(fantome_path).split('.')[:-1])
-            p = cslmao.import_fantome(fantome_path, mod_path)
+            mod_profile = tk_widgets.CSLMAO.get_mod_profile()
+            if mod_profile == 'all':
+                mod_profile = '0'
+            mod = cslmao.create_mod(
+                path=mod_path, enable=False, profile=mod_profile)
+            p = cslmao.import_fantome(fantome_path, mod.get_path())
             if p.returncode == 0:
-                mod = cslmao.create_mod(
-                    mod_path, False, tk_widgets.CSLMAO.get_mod_profile())
+                LOG(f'cslmao: Imported: {fantome_path}')
                 info, image = cslmao.get_info(mod)
-                mgs.append(add_mod(image=image, name=info['Name'], author=info['Author'],
-                                   version=info['Version'], description=info['Description'], enable=mod.enable))
-            LOG(f'cslmao: Imported: {fantome_path}')
+                mgs.append(
+                    add_mod(
+                        image=image,
+                        name=info['Name'],
+                        author=info['Author'],
+                        version=info['Version'],
+                        description=info['Description'],
+                        enable=mod.enable,
+                        profile=mod.profile
+                    )
+                )
         # grid after finish import
         for mg in mgs:
             mg()
@@ -220,22 +223,34 @@ def create_CSLMAO_page():
     def new_cmd():
         if tk_widgets.CSLMAO.make_overlay != None or tk_widgets.CSLMAO.run_overlay != None:
             return
-        mod_path = datetime.datetime.now().strftime(
-            '%Y%m%d%H%M%S%f')
-        mod = cslmao.create_mod(mod_path=mod_path, enable=False,
-                                profile=tk_widgets.CSLMAO.get_mod_profile())
+        mod_path = 'New Mod'
+        mod_info = {
+            'Name': 'New Mod',
+            'Author': 'Author',
+            'Version': '1.0',
+            'Description': ''
+        }
+        mod_profile = tk_widgets.CSLMAO.get_mod_profile()
+        if mod_profile == 'all':
+            mod_profile = '0'
+        mod = cslmao.create_mod(path=mod_path, enable=False,
+                                profile=mod_profile)
         cslmao.create_mod_folder(mod)
         cslmao.set_info(
             mod,
-            info={
-                'Name': 'New Mod',
-                'Author': 'Author',
-                'Version': '1.0',
-                'Description': ''
-            },
+            info=mod_info,
             image_path=None
         )
-        add_mod(cslmao.CSLMAO.blank_image)()
+        add_mod(
+            image=cslmao.CSLMAO.blank_image,
+            name=mod_info['Name'],
+            author=mod_info['Author'],
+            version=mod_info['Version'],
+            description=mod_info['Description'],
+            enable=mod.enable,
+            profile=mod.profile
+        )()
+        cslmao.save_mods()
     # create new button
     tk_widgets.CSLMAO.new_button = ctk.CTkButton(
         tk_widgets.CSLMAO.action_frame,
@@ -245,13 +260,41 @@ def create_CSLMAO_page():
     )
     tk_widgets.CSLMAO.new_button.grid(
         row=0, column=2, padx=5, pady=5, sticky=tk.NSEW)
+
+    def toggle_cmd():
+        need_save = False
+        mod_profile = tk_widgets.CSLMAO.get_mod_profile()
+        for mod_id, stuffs in enumerate(tk_widgets.CSLMAO.mods):
+            mod = cslmao.CSLMAO.MODS[mod_id]
+            if mod_profile == 'all' or mod.profile == mod_profile:
+                mod_enable = tk_widgets.CSLMAO.mods[mod_id][4]
+                if tk_widgets.CSLMAO.toggle_all:
+                    mod_enable.select()
+                else:
+                    mod_enable.deselect()
+                mod.enable = tk_widgets.CSLMAO.toggle_all
+                need_save = True
+        if need_save:
+            cslmao.save_mods()
+            tk_widgets.CSLMAO.toggle_all = not tk_widgets.CSLMAO.toggle_all
+
+    # create toggle button
+    tk_widgets.CSLMAO.toggle_button = ctk.CTkButton(
+        tk_widgets.CSLMAO.action_frame,
+        text='Enable/Disable All',
+        image=EmojiImage.create('✅'),
+        command=toggle_cmd
+    )
+    tk_widgets.CSLMAO.toggle_button.grid(
+        row=0, column=3, padx=5, pady=5, sticky=tk.NSEW)
+
     # create profile label
     tk_widgets.CSLMAO.profile_label = ctk.CTkLabel(
         tk_widgets.CSLMAO.action_frame,
         text='Profile: '
     )
     tk_widgets.CSLMAO.profile_label.grid(
-        row=0, column=4, padx=5, pady=5, sticky=tk.NSEW)
+        row=0, column=5, padx=5, pady=5, sticky=tk.NSEW)
 
     def profile_cmd(choice):
         tk_widgets.CSLMAO.refresh_profile(choice)
@@ -277,7 +320,7 @@ def create_CSLMAO_page():
     )
     tk_widgets.CSLMAO.profile_opt.set(setting.get('Cslmao.profile', 'all'))
     tk_widgets.CSLMAO.profile_opt.grid(
-        row=0, column=5, padx=5, pady=5, sticky=tk.NSEW)
+        row=0, column=6, padx=5, pady=5, sticky=tk.NSEW)
 
     # create modlist frame
     tk_widgets.CSLMAO.modlist_frame = ctk.CTkScrollableFrame(
@@ -288,7 +331,7 @@ def create_CSLMAO_page():
     tk_widgets.CSLMAO.modlist_frame.columnconfigure(0, weight=1)
 
     # link tk add mod for cslmao
-    def add_mod(image=None, name='New Mod', author='Author', version='1.0', description='', enable=False, profile='0'):
+    def add_mod(image, name, author, version, description, enable, profile):
         if image == None:
             image = cslmao.CSLMAO.blank_image
         id = len(tk_widgets.CSLMAO.mods)
@@ -342,7 +385,7 @@ def create_CSLMAO_page():
         # create mod info
         mod_info = ctk.CTkLabel(
             head_frame,
-            text=f'{name} by {author} V{version}\n{description}'
+            text=f'[Profile {profile}] {name} by {author} V{version}\n{description}'
         )
         mod_info.grid(row=id, column=2, padx=5, sticky=tk.NSEW)
         # create mod action frame
@@ -365,7 +408,7 @@ def create_CSLMAO_page():
                     break
             os.startfile(os.path.join(
                 cslmao.CSLMAO.raw_dir,
-                cslmao.CSLMAO.MODS[mod_id].path
+                cslmao.CSLMAO.MODS[mod_id].get_path()
             ))
         # create locate button
         locate_button = ctk.CTkButton(
@@ -422,7 +465,7 @@ def create_CSLMAO_page():
                     p = cslmao.export_fantome(
                         mod_path=os.path.join(
                             cslmao.CSLMAO.raw_dir,
-                            cslmao.CSLMAO.MODS[mod_id].path
+                            cslmao.CSLMAO.MODS[mod_id].get_path()
                         ),
                         fantome_path=fantome_path
                     )
@@ -611,14 +654,14 @@ def create_CSLMAO_page():
             mod = cslmao.CSLMAO.MODS[mod_id]
             image = tk_widgets.CSLMAO.mods[mod_id][10]
             cslmao.set_info(mod, info, image)
-            tk_widgets.CSLMAO.mods[mod_id][12].configure(
-                text=f'{info["Name"]} by {info["Author"]} V{info["Version"]}\n{info["Description"]}'
-            )
             if image != None:
                 tk_widgets.CSLMAO.mods[mod_id][13].configure(
                     image=ctk.CTkImage(Image.open(image), size=(144, 81))
                 )
             mod.profile = tk_widgets.CSLMAO.mods[mod_id][19].get()
+            tk_widgets.CSLMAO.mods[mod_id][12].configure(
+                text=f'[Profile {mod.profile}] {info["Name"]} by {info["Author"]} V{info["Version"]}\n{info["Description"]}'
+            )
             cslmao.CSLMAO.save_mods()
             tk_widgets.CSLMAO.refresh_profile(
                 setting.get('Cslmao.profile', 'all'))
@@ -673,11 +716,7 @@ def create_CSLMAO_page():
                     tk_widgets.CSLMAO.mods[id][0].grid_forget()
 
     def get_mod_profile():
-        profile = setting.get('Cslmao.profile', 'all')
-        if profile == 'all':
-            return '0'
-        else:
-            return profile
+        return setting.get('Cslmao.profile', 'all')
 
     cslmao.tk_add_mod = add_mod
     tk_widgets.CSLMAO.refresh_profile = cslmao.tk_refresh_profile = refresh_profile
@@ -834,7 +873,7 @@ def create_LFI_page():
             # highlight pattern
             end_pos = f'{found_pos} + {len(pattern)}c'
             file_text.tag_config(
-                "search", background="grey")
+                'search', background=tk_widgets.c_active_fg[0])
             file_text.tag_add('search', found_pos, end_pos)
             # set view
             file_text.see(found_pos)
@@ -1161,7 +1200,6 @@ def create_AMV_page():
                 0, weight=1)
             tk_widgets.AMV.htable_frame.columnconfigure(
                 0, weight=1)
-
             # create vertical scroll table frame
             tk_widgets.AMV.vtable_frame = ctk.CTkScrollableFrame(
                 tk_widgets.AMV.htable_frame,
@@ -1218,6 +1256,23 @@ def create_AMV_page():
                 if not01_count > 0:
                     return False
             return True
+
+        def focus_cmd(event):
+            top_y = event.widget.master.winfo_y()
+            bot_y = top_y+event.widget.master.winfo_height()
+            top_yview, bot_yview = tk_widgets.AMV.vtable_frame._parent_canvas.yview()
+            height = tk_widgets.AMV.vtable_frame.winfo_height()
+            top_yview, bot_yview = int(
+                top_yview * height), int(bot_yview*height)
+            if bot_y > bot_yview:
+                d = bot_y-bot_yview
+                tk_widgets.AMV.vtable_frame._parent_canvas.yview_scroll(
+                    d, 'units')
+            elif top_y < top_yview:
+                d = top_y-top_yview
+                tk_widgets.AMV.vtable_frame._parent_canvas.yview_scroll(
+                    d, 'units')
+
         for j in range(tk_widgets.AMV.table_column+1):
             for i in range(tk_widgets.AMV.table_row+1):
                 windex = i*(tk_widgets.AMV.table_column+1)+j
@@ -1252,6 +1307,8 @@ def create_AMV_page():
                             '%P'
                         )
                     )
+                    tk_widgets.AMV.table_widgets[windex].bind(
+                        '<FocusIn>', focus_cmd)
                     # safe weight value if joints number > masks number
                     weight_value = '0'
                     try:
@@ -1462,7 +1519,7 @@ def create_HM_page():
             )
             if len(file_paths) > 0:
                 def working_thrd():
-                    Log.tk_cooldown = 3000
+                    Log.tk_cooldown = 5000
                     hash_manager.ExtractedHashes.extract(*file_paths)
                     Log.tk_cooldown = 0
                     LOG('hash_manager: Done: Extract hashes.')
@@ -1500,7 +1557,7 @@ def create_HM_page():
                             root, file).replace('\\', '/'))
                 if len(file_paths) > 0:
                     def working_thrd():
-                        Log.tk_cooldown = 3000
+                        Log.tk_cooldown = 5000
                         hash_manager.ExtractedHashes.extract(*file_paths)
                         Log.tk_cooldown = 0
                         LOG('hash_manager: Done: Extract hashes.')
@@ -2427,7 +2484,7 @@ def create_SHR_page():
     def backup_cmd():
         setting.set('Shrum.backup', tk_widgets.SHR.backup_switch.get())
         setting.save()
-    # create use ritobin switch
+    # create backup switch
     tk_widgets.SHR.backup_switch = ctk.CTkSwitch(
         tk_widgets.SHR.action_frame,
         text='Create backup before rename (safe)',
@@ -2605,6 +2662,9 @@ def create_WT_page():
     tk_widgets.WT.page_frame.rowconfigure(1, weight=699)
     # init stuffs
     tk_widgets.WT.working_thread = None
+    tk_widgets.WT.loaded_wads = []
+    tk_widgets.WT.loaded_wad_paths = []
+    tk_widgets.WT.loaded_chunk_hashes = []
     # create action frame
     tk_widgets.WT.action_frame = ctk.CTkFrame(
         tk_widgets.WT.page_frame,
@@ -2631,14 +2691,14 @@ def create_WT_page():
             if len(file_paths) > 0:
                 def working_thrd():
                     hash_manager.read_wad_hashes()
+                    Log.tk_cooldown = 5000
                     for file_path in file_paths:
                         src = file_path
                         dst = src.replace('.wad.client', '.wad')
-                        Log.tk_cooldown = 3000
                         wad_tool.unpack(src, dst, hash_manager.HASHTABLES)
-                        Log.tk_cooldown = 0             
                         LOG(
                             f'wad_tool: Done: Unpack {src}')
+                    Log.tk_cooldown = 0
                     hash_manager.free_wad_hashes()
                 tk_widgets.WT.working_thread = Thread(
                     target=working_thrd,
@@ -2675,7 +2735,7 @@ def create_WT_page():
                     else:
                         if not dst.endswith('.wad.client'):
                             dst += '.wad.client'
-                    Log.tk_cooldown = 3000
+                    Log.tk_cooldown = 5000
                     wad_tool.pack(src, dst)
                     Log.tk_cooldown = 0
                     LOG(
@@ -2727,7 +2787,41 @@ def create_WT_page():
     tk_widgets.WT.action3_frame.rowconfigure(0, weight=1)
     tk_widgets.WT.action3_frame.columnconfigure(0, weight=1)
     tk_widgets.WT.action3_frame.columnconfigure(1, weight=1)
-    tk_widgets.WT.action3_frame.columnconfigure(2, weight=699)
+    tk_widgets.WT.action3_frame.columnconfigure(2, weight=1)
+    tk_widgets.WT.action3_frame.columnconfigure(3, weight=10)
+    tk_widgets.WT.action3_frame.columnconfigure(4, weight=10)
+
+    def add_cmd(wad_paths):
+        def add_thrd():
+            LOG('wad_tool: Running: Load WADs.')
+            hash_manager.read_wad_hashes()
+            for wad_path in wad_paths:
+                try:
+                    wad = pyRitoFile.read_wad(wad_path)
+                    wad.un_hash(hash_manager.HASHTABLES)
+                    tk_widgets.WT.loaded_wads.append(wad)
+                    tk_widgets.WT.loaded_wad_paths.append(wad_path)
+                    tk_widgets.WT.loaded_chunk_hashes.extend(
+                        chunk.hash for chunk in wad.chunks)
+                except:
+                    pass
+            hash_manager.free_wad_hashes()
+            LOG('wad_tool: Done: Load WADs.')
+            tk_widgets.WT.wad_text.configure(state=tk.NORMAL)
+            tk_widgets.WT.wad_text.insert(
+                tk.END, '\n'.join(tk_widgets.WT.loaded_wad_paths) + '\n')
+            tk_widgets.WT.wad_text.configure(state=tk.DISABLED)
+            tk_widgets.WT.chunk_text.configure(state=tk.NORMAL)
+            tk_widgets.WT.chunk_text.insert(
+                tk.END, '\n'.join(tk_widgets.WT.loaded_chunk_hashes) + '\n')
+            tk_widgets.WT.chunk_text.configure(state=tk.DISABLED)
+
+        if check_thread_safe(tk_widgets.WT.working_thread):
+            tk_widgets.WT.working_thread = Thread(target=add_thrd, daemon=True)
+            tk_widgets.WT.working_thread.start()
+        else:
+            LOG(
+                'wad_tool: Failed: A thread is already running, wait for it to finished.')
 
     def addfile_cmd():
         file_paths = tkfd.askopenfilenames(
@@ -2740,24 +2834,54 @@ def create_WT_page():
             initialdir=setting.get('default_folder', None)
         )
         if len(file_paths) > 0:
-            tk_widgets.WT.file_text.configure(state=tk.NORMAL)
-            tk_widgets.WT.file_text.insert(tk.END, '\n'.join(file_paths))
-            tk_widgets.WT.file_text.configure(state=tk.DISABLED)
+            add_cmd(file_paths)
 
     # create add file button
     tk_widgets.WT.addfile_button = ctk.CTkButton(
         tk_widgets.WT.action3_frame,
-        text='Add Files',
+        text='Add WADs',
         image=EmojiImage.create('📄'),
         command=addfile_cmd
     )
     tk_widgets.WT.addfile_button.grid(
         row=0, column=0, padx=5, pady=5, sticky=tk.NSEW)
 
+    def addfolder_cmd():
+        dirname = tkfd.askdirectory(
+            parent=tk_widgets.main_tk,
+            title='Select Folder contains WADs',
+            initialdir=setting.get('default_folder', None)
+        )
+        file_paths = []
+        for root, dirs, files in os.walk(dirname):
+            for file in files:
+                if file.endswith('.wad.client'):
+                    file_paths.append(os.path.join(
+                        root, file).replace('\\', '/'))
+        if len(file_paths) > 0:
+            add_cmd(file_paths)
+
+    # create add folder button
+    tk_widgets.WT.addfolder_button = ctk.CTkButton(
+        tk_widgets.WT.action3_frame,
+        text='Scan WADs in folder',
+        image=EmojiImage.create('📁'),
+        command=addfolder_cmd
+    )
+    tk_widgets.WT.addfolder_button.grid(
+        row=0, column=1, padx=5, pady=5, sticky=tk.NSEW)
+
     def clear_cmd():
-        tk_widgets.WT.file_text.configure(state=tk.NORMAL)
-        tk_widgets.WT.file_text.delete('1.0', tk.END)
-        tk_widgets.WT.file_text.configure(state=tk.DISABLED)
+        tk_widgets.WT.loaded_wads = []
+        tk_widgets.WT.loaded_wad_paths = []
+        tk_widgets.WT.loaded_chunk_hashes = []
+        tk_widgets.WT.wad_text.configure(state=tk.NORMAL)
+        tk_widgets.WT.wad_text.delete('1.0', tk.END)
+        tk_widgets.WT.wad_text.configure(state=tk.DISABLED)
+        tk_widgets.WT.chunk_text.configure(state=tk.NORMAL)
+        tk_widgets.WT.chunk_text.delete('1.0', tk.END)
+        tk_widgets.WT.chunk_text.configure(state=tk.DISABLED)
+
     # create clear button
     tk_widgets.WT.clear_button = ctk.CTkButton(
         tk_widgets.WT.action3_frame,
@@ -2766,15 +2890,109 @@ def create_WT_page():
         command=clear_cmd
     )
     tk_widgets.WT.clear_button.grid(
-        row=0, column=1, padx=5, pady=5, sticky=tk.NSEW)
-    # create file text
-    tk_widgets.WT.file_text = ctk.CTkTextbox(
-        tk_widgets.WT.action2_frame,
+        row=0, column=2, padx=5, pady=5, sticky=tk.NSEW)
+
+    # filter command for both include and exclude entry
+    def filter_cmd(event):
+        # get keywords
+        include_keywords = tk_widgets.WT.include_entry.get().split()
+        exclude_keywords = tk_widgets.WT.exclude_entry.get().split()
+        if len(include_keywords) == 0:
+            # reset include
+            tk_widgets.WT.chunk_text.tag_remove('include', '1.0', tk.END)
+            tk_widgets.WT.chunk_text.configure(state=tk.NORMAL)
+            tk_widgets.WT.chunk_text.delete('1.0', tk.END)
+            tk_widgets.WT.chunk_text.insert(
+                tk.END, '\n'.join(tk_widgets.WT.loaded_chunk_hashes) + '\n')
+            tk_widgets.WT.chunk_text.configure(state=tk.DISABLED)
+            return
+        # filter inside core first
+        temp_chunk_hashes = []
+        for chunk_hash in tk_widgets.WT.loaded_chunk_hashes:
+            allow = False
+            for keyword in include_keywords:
+                if keyword in chunk_hash:
+                    allow = True
+                    break
+            for keyword in exclude_keywords:
+                if keyword in chunk_hash:
+                    allow = False
+                    break
+            if allow:
+                temp_chunk_hashes.append(chunk_hash)
+
+        # reset tk text with filtered core
+        if len(temp_chunk_hashes) != len(tk_widgets.WT.loaded_chunk_hashes):
+            tk_widgets.WT.chunk_text.configure(state=tk.NORMAL)
+            tk_widgets.WT.chunk_text.delete('1.0', tk.END)
+            tk_widgets.WT.chunk_text.insert(
+                tk.END, '\n'.join(temp_chunk_hashes) + '\n')
+            tk_widgets.WT.chunk_text.configure(state=tk.DISABLED)
+
+        # hightlight tk text
+        tk_widgets.WT.chunk_text.tag_remove('include', '1.0', tk.END)
+        tk_widgets.WT.chunk_text.tag_config(
+            'include', background=tk_widgets.c_active_fg[0])
+        for keyword in include_keywords:
+            start_index = '1.0'
+            keyword_length = len(keyword)
+            while True:
+                start_index = tk_widgets.WT.chunk_text.search(
+                    keyword,
+                    start_index,
+                    nocase=True,
+                    stopindex=tk.END
+                )
+                if start_index == '':
+                    break
+                end_index = f'{start_index} + {keyword_length}c'
+                tk_widgets.WT.chunk_text.tag_add(
+                    'include', start_index, end_index)
+                start_index = end_index
+
+    # create include entry
+    tk_widgets.WT.include_entry = ctk.CTkEntry(
+        tk_widgets.WT.action3_frame,
+        placeholder_text='Include keywords'
+    )
+    tk_widgets.WT.include_entry.grid(
+        row=0, column=3, padx=5, pady=5, sticky=tk.NSEW)
+    tk_widgets.WT.include_entry.bind('<Return>', filter_cmd)
+
+    # create exclude entry
+    tk_widgets.WT.exclude_entry = ctk.CTkEntry(
+        tk_widgets.WT.action3_frame,
+        placeholder_text='Exclude keywords (after include)'
+    )
+    tk_widgets.WT.exclude_entry.grid(
+        row=0, column=4, padx=5, pady=5, sticky=tk.NSEW)
+    tk_widgets.WT.exclude_entry.bind('<Return>', filter_cmd)
+
+    # create label frame
+    tk_widgets.WT.label_frame = ctk.CTkFrame(
+        tk_widgets.WT.action2_frame
+    )
+    tk_widgets.WT.label_frame.grid(
+        row=2, column=0, padx=5, pady=5, sticky=tk.NSEW)
+    tk_widgets.WT.label_frame.rowconfigure(0, weight=1)
+    tk_widgets.WT.label_frame.columnconfigure(0, weight=3)
+    tk_widgets.WT.label_frame.columnconfigure(1, weight=7)
+    # create wad text
+    tk_widgets.WT.wad_text = ctk.CTkTextbox(
+        tk_widgets.WT.label_frame,
         wrap=tk.NONE,
         state=tk.DISABLED
     )
-    tk_widgets.WT.file_text.grid(
-        row=2, column=0, padx=5, pady=5, sticky=tk.NSEW)
+    tk_widgets.WT.wad_text.grid(
+        row=0, column=0, padx=5, pady=5, sticky=tk.NSEW)
+    # create chunk text
+    tk_widgets.WT.chunk_text = ctk.CTkTextbox(
+        tk_widgets.WT.label_frame,
+        wrap=tk.NONE,
+        state=tk.DISABLED
+    )
+    tk_widgets.WT.chunk_text.grid(
+        row=0, column=1, padx=5, pady=5, sticky=tk.NSEW)
 
     def bulk_cmd():
         if check_thread_safe(tk_widgets.WT.working_thread):
@@ -2784,15 +3002,20 @@ def create_WT_page():
                 initialdir=setting.get('default_folder', None)
             )
             if dir_path != '':
-                file_paths = tk_widgets.WT.file_text.get(
+                wad_paths = tk_widgets.WT.wad_text.get(
                     '1.0', 'end-1c').split('\n')
-                if len(file_paths) > 0:
+                chunk_hashes = tk_widgets.WT.chunk_text.get(
+                    '1.0', 'end-1c').split('\n')
+                if len(chunk_hashes) == 0:
+                    chunk_hashes = None
+                wad_paths.remove('')
+                if len(wad_paths) > 0:
                     def working_thrd():
                         hash_manager.read_wad_hashes()
-                        Log.tk_cooldown = 3000
-                        for file_path in file_paths:
-                            wad_tool.unpack(file_path, dir_path,
-                                            hash_manager.HASHTABLES)
+                        Log.tk_cooldown = 5000
+                        for wad_path in wad_paths:
+                            wad_tool.unpack(wad_path, dir_path,
+                                            hash_manager.HASHTABLES, filter=chunk_hashes)
                         Log.tk_cooldown = 0
                         hash_manager.free_wad_hashes()
                         LOG(f'wad_tool: Done: Unpack to {dir_path}')
@@ -3146,6 +3369,227 @@ def create_ST_page():
         row=9, column=2, padx=5, pady=5, sticky=tk.NSEW)
 
 
+def create_SBORF_page():
+    tk_widgets.SBORF.page_frame = ctk.CTkFrame(
+        tk_widgets.mainright_frame,
+        fg_color=TRANSPARENT,
+    )
+    tk_widgets.SBORF.page_frame.columnconfigure(0, weight=1)
+    tk_widgets.SBORF.page_frame.rowconfigure(0, weight=1)
+    tk_widgets.SBORF.page_frame.rowconfigure(1, weight=1)
+    tk_widgets.SBORF.page_frame.rowconfigure(2, weight=999)
+
+    # create action frame
+    tk_widgets.SBORF.action_frame = ctk.CTkFrame(
+        tk_widgets.SBORF.page_frame,
+        fg_color=TRANSPARENT
+    )
+    tk_widgets.SBORF.action_frame.grid(
+        row=0, column=0, padx=5, pady=5, sticky=tk.NSEW)
+    tk_widgets.SBORF.action_frame.columnconfigure(0, weight=999)
+    tk_widgets.SBORF.action_frame.columnconfigure(1, weight=1)
+    tk_widgets.SBORF.action_frame.rowconfigure(0, weight=1)
+
+    def backup_cmd():
+        setting.set('Sborf.backup', tk_widgets.SBORF.backup_switch.get())
+        setting.save()
+    # create backup switch
+    tk_widgets.SBORF.backup_switch = ctk.CTkSwitch(
+        tk_widgets.SBORF.action_frame,
+        text='Create backup before fix (safe)',
+        command=backup_cmd
+    )
+    if setting.get('Sborf.backup', 1) == 1:
+        tk_widgets.SBORF.backup_switch.select()
+    else:
+        tk_widgets.SBORF.backup_switch.deselect()
+    tk_widgets.SBORF.backup_switch.grid(
+        row=0, column=1, padx=5, pady=5, sticky=tk.NSEW)
+
+    # create skin frame
+    tk_widgets.SBORF.skin_frame = ctk.CTkFrame(
+        tk_widgets.SBORF.page_frame,
+        fg_color=TRANSPARENT
+    )
+    tk_widgets.SBORF.skin_frame.grid(
+        row=1, column=0, padx=5, pady=5, sticky=tk.NSEW)
+    tk_widgets.SBORF.skin_frame.rowconfigure(0, weight=1)
+    tk_widgets.SBORF.skin_frame.rowconfigure(1, weight=1)
+    tk_widgets.SBORF.skin_frame.rowconfigure(2, weight=1)
+    tk_widgets.SBORF.skin_frame.rowconfigure(3, weight=1)
+    tk_widgets.SBORF.skin_frame.rowconfigure(4, weight=999)
+    tk_widgets.SBORF.skin_frame.columnconfigure(0, weight=20)
+    tk_widgets.SBORF.skin_frame.columnconfigure(1, weight=1)
+    tk_widgets.SBORF.skin_frame.columnconfigure(2, weight=20)
+    tk_widgets.SBORF.skin_frame.columnconfigure(3, weight=1)
+
+    # create your skin label
+    tk_widgets.SBORF.yourskin_label = ctk.CTkLabel(
+        tk_widgets.SBORF.skin_frame,
+        text='Your skin',
+        anchor=tk.CENTER,
+        justify=tk.CENTER
+    )
+    tk_widgets.SBORF.yourskin_label.grid(
+        row=0, column=0, padx=5, pady=5, sticky=tk.NSEW)
+
+    # create riot skin label
+    tk_widgets.SBORF.riotskin_label = ctk.CTkLabel(
+        tk_widgets.SBORF.skin_frame,
+        text='Rito skin',
+        anchor=tk.CENTER,
+        justify=tk.CENTER
+    )
+    tk_widgets.SBORF.riotskin_label.grid(
+        row=0, column=2, padx=5, pady=5, sticky=tk.NSEW)
+
+    # create skl entry
+    tk_widgets.SBORF.skl_entry = ctk.CTkEntry(
+        tk_widgets.SBORF.skin_frame,
+    )
+    tk_widgets.SBORF.skl_entry.grid(
+        row=1, column=0, padx=5, pady=5, sticky=tk.NSEW)
+
+    def sklbrowse_cmd():
+        skl_path = tkfd.askopenfilename(
+            parent=tk_widgets.main_tk,
+            title='Select your SKL file',
+            filetypes=(
+                ('SKL files', '*.skl'),
+                ('All files', '*.*'),
+            ),
+            initialdir=setting.get('default_folder', None)
+        )
+        tk_widgets.SBORF.skl_entry.delete(0, tk.END)
+        tk_widgets.SBORF.skl_entry.insert(tk.END, skl_path)
+    # create skl browse button
+    tk_widgets.SBORF.sklbrowse_button = ctk.CTkButton(
+        tk_widgets.SBORF.skin_frame,
+        text='Browse SKL',
+        image=EmojiImage.create('📄'),
+        anchor=tk.CENTER,
+        command=sklbrowse_cmd
+    )
+    tk_widgets.SBORF.sklbrowse_button.grid(
+        row=1, column=1, padx=5, pady=5, sticky=tk.NSEW)
+
+    # create riot skl entry
+    tk_widgets.SBORF.riotskl_entry = ctk.CTkEntry(
+        tk_widgets.SBORF.skin_frame,
+    )
+    tk_widgets.SBORF.riotskl_entry.grid(
+        row=1, column=2, padx=5, pady=5, sticky=tk.NSEW)
+
+    def riotsklbrowse_cmd():
+        skl_path = tkfd.askopenfilename(
+            parent=tk_widgets.main_tk,
+            title='Select riot SKL file',
+            filetypes=(
+                ('SKL files', '*.skl'),
+                ('All files', '*.*'),
+            ),
+            initialdir=setting.get('default_folder', None)
+        )
+        tk_widgets.SBORF.riotskl_entry.delete(0, tk.END)
+        tk_widgets.SBORF.riotskl_entry.insert(tk.END, skl_path)
+    # create riot skl browse button
+    tk_widgets.SBORF.riotsklbrowse_button = ctk.CTkButton(
+        tk_widgets.SBORF.skin_frame,
+        text='Browse Riot SKL',
+        image=EmojiImage.create('📄'),
+        anchor=tk.CENTER,
+        command=riotsklbrowse_cmd
+    )
+    tk_widgets.SBORF.riotsklbrowse_button.grid(
+        row=1, column=3, padx=5, pady=5, sticky=tk.NSEW)
+
+    # create skn entry
+    tk_widgets.SBORF.skn_entry = ctk.CTkEntry(
+        tk_widgets.SBORF.skin_frame,
+    )
+    tk_widgets.SBORF.skn_entry.grid(
+        row=2, column=0, padx=5, pady=5, sticky=tk.NSEW)
+
+    def sknbrowse_cmd():
+        skn_path = tkfd.askopenfilename(
+            parent=tk_widgets.main_tk,
+            title='Select your SKN file',
+            filetypes=(
+                ('SKN files', '*.skn'),
+                ('All files', '*.*'),
+            ),
+            initialdir=setting.get('default_folder', None)
+        )
+        tk_widgets.SBORF.skn_entry.delete(0, tk.END)
+        tk_widgets.SBORF.skn_entry.insert(tk.END, skn_path)
+    # create skn browse button
+    tk_widgets.SBORF.sknbrowse_button = ctk.CTkButton(
+        tk_widgets.SBORF.skin_frame,
+        text='Browse SKN',
+        image=EmojiImage.create('📄'),
+        anchor=tk.CENTER,
+        command=sknbrowse_cmd
+    )
+    tk_widgets.SBORF.sknbrowse_button.grid(
+        row=2, column=1, padx=5, pady=5, sticky=tk.NSEW)
+
+    # create riot skn entry
+    tk_widgets.SBORF.riotskn_entry = ctk.CTkEntry(
+        tk_widgets.SBORF.skin_frame,
+        placeholder_text='(Leave empty if dont need)'
+    )
+    tk_widgets.SBORF.riotskn_entry.grid(
+        row=2, column=2, padx=5, pady=5, sticky=tk.NSEW)
+
+    def riotsknbrowse_cmd():
+        skn_path = tkfd.askopenfilename(
+            parent=tk_widgets.main_tk,
+            title='Select riot SKN file',
+            filetypes=(
+                ('SKN files', '*.skn'),
+                ('All files', '*.*'),
+            ),
+            initialdir=setting.get('default_folder', None)
+        )
+        tk_widgets.SBORF.riotskn_entry.delete(0, tk.END)
+        tk_widgets.SBORF.riotskn_entry.insert(tk.END, skn_path)
+    # create riot skn browse button
+    tk_widgets.SBORF.riotsknbrowse_button = ctk.CTkButton(
+        tk_widgets.SBORF.skin_frame,
+        text='Browse Riot SKN',
+        image=EmojiImage.create('📄'),
+        anchor=tk.CENTER,
+        command=riotsknbrowse_cmd
+    )
+    tk_widgets.SBORF.riotsknbrowse_button.grid(
+        row=2, column=3, padx=5, pady=5, sticky=tk.NSEW)
+
+    def skinfix_cmd():
+        skl_path = tk_widgets.SBORF.skl_entry.get()
+        if skl_path == '':
+            raise Exception('sborf: Failed: Read SKL: Empty SKL path.')
+        skn_path = tk_widgets.SBORF.skn_entry.get()
+        if skn_path == '':
+            raise Exception('sborf: Failed: Read SKN: Empty SKN path.')
+        riotskl_path = tk_widgets.SBORF.riotskl_entry.get()
+        if riotskl_path == '':
+            raise Exception(
+                'sborf: Failed: Read Riot SKL: Empty Riot SKL path.')
+        riotskn_path = tk_widgets.SBORF.riotskn_entry.get()
+        sborf.skin_fix(skl_path, skn_path, riotskl_path, riotskn_path,
+                       backup=setting.get('Sborf.backup', 1))
+    # create skin fix button
+    tk_widgets.SBORF.skinfix_button = ctk.CTkButton(
+        tk_widgets.SBORF.skin_frame,
+        text='Fix your skin',
+        image=EmojiImage.create('🐊'),
+        anchor=tk.CENTER,
+        command=skinfix_cmd
+    )
+    tk_widgets.SBORF.skinfix_button.grid(
+        row=3, column=0, padx=5, pady=5, sticky=tk.NS)
+
+
 def select_right_page(selected):
     # hide all page
     for page in tk_widgets.pages:
@@ -3277,6 +3721,11 @@ def create_page_controls():
             tk_widgets.mainleft_frame,
             text='pyntex',
             command=lambda: control_cmd(10)
+        ),
+        ctk.CTkButton(
+            tk_widgets.mainleft_frame,
+            text='sborf',
+            command=lambda: control_cmd(11)
         )
     ]
     for id, control_button in enumerate(tk_widgets.control_buttons):
@@ -3310,6 +3759,7 @@ def create_page_controls():
     tk_widgets.HP = tk_widgets.pages[8]
     tk_widgets.WT = tk_widgets.pages[9]
     tk_widgets.PT = tk_widgets.pages[10]
+    tk_widgets.SBORF = tk_widgets.pages[11]
     # create right pages
     tk_widgets.create_right_page = [
         create_CSLMAO_page,
@@ -3322,7 +3772,8 @@ def create_page_controls():
         create_SHR_page,
         create_HP_page,
         create_WT_page,
-        create_PT_page
+        create_PT_page,
+        create_SBORF_page
     ]
     # create LOG and ST control, page
     tk_widgets.minilog_control = None
@@ -3365,6 +3816,7 @@ def create_bottom_widgets():
 
 
 def start():
+    set_rce()
     create_main_app_and_frames()
     # load settings first
     setting.prepare(LOG)
@@ -3389,5 +3841,6 @@ def start():
     hapiBin.prepare(LOG)
     pyntex.prepare(LOG)
     bnk_tool.prepare(LOG)
+    sborf.prepare(LOG)
     # loop the UI
     tk_widgets.main_tk.mainloop()

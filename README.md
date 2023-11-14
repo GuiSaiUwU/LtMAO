@@ -108,7 +108,7 @@ Simple tool to unpack, pack WAD files.
 Can bulk unpack multiple WADs into same output. 
 **Example:** Bulk unpacking all voiced wad then throw into [vo_helper](https://github.com/tarngaina/LtMAO#vo_helper) is a fast way to create a champion voicepack for specific language mod.
 
-![](https://i.imgur.com/bMV57O7.png)
+![](https://i.imgur.com/rx6NijO.png)
 
 
 ## pyntex
@@ -116,6 +116,12 @@ Can bulk unpack multiple WADs into same output.
 Print out mentioned & missing files in all BINs inside a WAD or a Folder.
 
 ![](https://i.imgur.com/Tj5GPV6.png)
+
+
+## sborf
+Fix skin based on rito files: moonwalk animations, layering animations,...
+
+![](https://i.imgur.com/nOthA0c.png)
 
 # Extra:
 - [LeagueToolKit](https://github.com/LeagueToolkit/LeagueToolkit)
