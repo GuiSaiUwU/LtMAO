@@ -2,7 +2,6 @@ from io import BytesIO
 from ..pyRitoFile.io import BinStream
 from ..pyRitoFile.hash import FNV1a
 from enum import IntEnum
-from functools import partial
 
 
 def hash_to_hex(hash):
