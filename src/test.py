@@ -25,5 +25,19 @@ if __name__ == '__main__':
         output_bytes = output_bytes + b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
         print(skn_bytes == output_bytes)  # True yay :D
         print(len(skn_bytes), len(output_bytes))
+    
+    def test_new_binhelper():
+        from LtMAO.pyRitoFile.bin import BIN
+        from requests import get
 
-test()
+        bin_file = BIN()
+        bin_data = get(r'https://raw.communitydragon.org/latest/game/data/characters/yone/skins/skin58.bin').content
+        
+        #@db
+        def read_bin():
+            bin_file.read('', bin_data)
+            output = bin_file.write('', True)
+            assert (output == bin_data)
+            
+        read_bin()
+    test_new_binhelper()
