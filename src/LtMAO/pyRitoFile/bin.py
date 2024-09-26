@@ -68,7 +68,7 @@ class BINType(IntEnum):
 
 class BINHelper:
     size_offsets = []
-    read_dict = {
+    read_value_lambdas = {
         BINType.Empty: (lambda bs: bs.read_u16(3)),
         BINType.Bool: (lambda bs: bs.read_b()[0]),
         BINType.I8: (lambda bs: bs.read_i8()[0]),
@@ -114,7 +114,7 @@ class BINHelper:
     
     @staticmethod
     def read_value(bs, value_type):
-        return BINHelper.read_dict[value_type](bs)
+        return BINHelper.read_value_lambdas[value_type](bs)
 
     @staticmethod
     def fix_type(bin_type, legacy=False):
