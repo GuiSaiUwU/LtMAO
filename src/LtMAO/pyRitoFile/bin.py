@@ -70,30 +70,30 @@ class BINHelper:
     size_offsets = []
 
     read_value_lambdas = {
-        BINType.Empty: (lambda bs, *_args: bs.read_u16(3)),
-        BINType.Bool: (lambda bs, *_args: bs.read_b()[0]),
-        BINType.I8: (lambda bs, *_args: bs.read_i8()[0]),
-        BINType.U8: (lambda bs, *_args: bs.read_u8()[0]),
-        BINType.I16: (lambda bs, *_args: bs.read_i16()[0]),
-        BINType.U16: (lambda bs, *_args: bs.read_u16()[0]),
-        BINType.I32: (lambda bs, *_args: bs.read_i32()[0]),
-        BINType.U32: (lambda bs, *_args: bs.read_u32()[0]),
-        BINType.I64: (lambda bs, *_args: bs.read_i64()[0]),
-        BINType.U64: (lambda bs, *_args: bs.read_u64()[0]),
-        BINType.F32: (lambda bs, *_args: bs.read_f32()[0]),
-        BINType.Vec2: (lambda bs, *_args: bs.read_vec2()[0]),
-        BINType.Vec3: (lambda bs, *_args: bs.read_vec3()[0]),
-        BINType.Vec4: (lambda bs, *_args: bs.read_vec4()[0]),
-        BINType.Mtx4: (lambda bs, *_args: bs.read_mtx4()[0]),
-        BINType.RGBA: (lambda bs, *_args: bs.read_u8(4)),
-        BINType.String: (lambda bs, *_args: bs.read_a(bs.read_u16()[0])[0]),
-        BINType.Hash: (lambda bs, *_args: hash_to_hex(bs.read_u32()[0])),
-        BINType.File: (lambda bs, *_args: bs.read_u64()[0]),
-        BINType.Link: (lambda bs, *_args: hash_to_hex(bs.read_u32()[0])),
-        BINType.Flag: (lambda bs, *_args: bs.read_u8()[0]),
+        BINType.Empty: (lambda bs: bs.read_u16(3)),
+        BINType.Bool: (lambda bs: bs.read_b()[0]),
+        BINType.I8: (lambda bs: bs.read_i8()[0]),
+        BINType.U8: (lambda bs: bs.read_u8()[0]),
+        BINType.I16: (lambda bs: bs.read_i16()[0]),
+        BINType.U16: (lambda bs: bs.read_u16()[0]),
+        BINType.I32: (lambda bs: bs.read_i32()[0]),
+        BINType.U32: (lambda bs: bs.read_u32()[0]),
+        BINType.I64: (lambda bs: bs.read_i64()[0]),
+        BINType.U64: (lambda bs: bs.read_u64()[0]),
+        BINType.F32: (lambda bs: bs.read_f32()[0]),
+        BINType.Vec2: (lambda bs: bs.read_vec2()[0]),
+        BINType.Vec3: (lambda bs: bs.read_vec3()[0]),
+        BINType.Vec4: (lambda bs: bs.read_vec4()[0]),
+        BINType.Mtx4: (lambda bs: bs.read_mtx4()[0]),
+        BINType.RGBA: (lambda bs: bs.read_u8(4)),
+        BINType.String: (lambda bs: bs.read_a(bs.read_u16()[0])[0]),
+        BINType.Hash: (lambda bs: hash_to_hex(bs.read_u32()[0])),
+        BINType.File: (lambda bs: bs.read_u64()[0]),
+        BINType.Link: (lambda bs: hash_to_hex(bs.read_u32()[0])),
+        BINType.Flag: (lambda bs: bs.read_u8()[0]),
         # Pointer and Embed special functions #
-        BINType.Pointer: (lambda bs, *_args: BINHelper.read_value_pointer(bs, BINType.Pointer)),
-        BINType.Embed: (lambda bs, *_args: BINHelper.read_value_pointer(bs, BINType.Embed)),
+        BINType.Pointer: (lambda bs: BINHelper.read_value_pointer(bs, BINType.Pointer)),
+        BINType.Embed: (lambda bs: BINHelper.read_value_pointer(bs, BINType.Embed)),
     }
 
     @staticmethod
@@ -179,15 +179,35 @@ class BINHelper:
         }
     
     # read_field_lambdas = read_value_lambdas with some more
-    read_field_lambdas = read_value_lambdas.copy()
-    read_field_lambdas.update({
+    read_field_lambdas = {
+        BINType.Empty: (lambda bs, _non_used_field: bs.read_u16(3)),
+        BINType.Bool: (lambda bs, _non_used_field: bs.read_b()[0]),
+        BINType.I8: (lambda bs, _non_used_field: bs.read_i8()[0]),
+        BINType.U8: (lambda bs, _non_used_field: bs.read_u8()[0]),
+        BINType.I16: (lambda bs, _non_used_field: bs.read_i16()[0]),
+        BINType.U16: (lambda bs, _non_used_field: bs.read_u16()[0]),
+        BINType.I32: (lambda bs, _non_used_field: bs.read_i32()[0]),
+        BINType.U32: (lambda bs, _non_used_field: bs.read_u32()[0]),
+        BINType.I64: (lambda bs, _non_used_field: bs.read_i64()[0]),
+        BINType.U64: (lambda bs, _non_used_field: bs.read_u64()[0]),
+        BINType.F32: (lambda bs, _non_used_field: bs.read_f32()[0]),
+        BINType.Vec2: (lambda bs, _non_used_field: bs.read_vec2()[0]),
+        BINType.Vec3: (lambda bs, _non_used_field: bs.read_vec3()[0]),
+        BINType.Vec4: (lambda bs, _non_used_field: bs.read_vec4()[0]),
+        BINType.Mtx4: (lambda bs, _non_used_field: bs.read_mtx4()[0]),
+        BINType.RGBA: (lambda bs, _non_used_field: bs.read_u8(4)),
+        BINType.String: (lambda bs, _non_used_field: bs.read_a(bs.read_u16()[0])[0]),
+        BINType.Hash: (lambda bs, _non_used_field: hash_to_hex(bs.read_u32()[0])),
+        BINType.File: (lambda bs, _non_used_field: bs.read_u64()[0]),
+        BINType.Link: (lambda bs, _non_used_field: hash_to_hex(bs.read_u32()[0])),
+        BINType.Flag: (lambda bs, _non_used_field: bs.read_u8()[0]),
         BINType.List: read_field_list,
         BINType.List2: read_field_list,
         BINType.Pointer: read_field_pointer,
         BINType.Embed: read_field_pointer,
         BINType.Option: read_field_option,
         BINType.Map: read_field_map,
-    })
+    }
 
     @staticmethod
     def read_field(bs):
